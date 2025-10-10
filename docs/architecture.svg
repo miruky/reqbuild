@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 200" role="img" aria-label="reqbuildのアーキテクチャ図">
+  <title>reqbuildのアーキテクチャ</title>
+  <style>
+    .box { fill: none; stroke: #8b949e; stroke-width: 1.5; }
+    .accent-box { fill: none; stroke: #8fd18a; stroke-width: 1.5; }
+    .label { font: 600 14px 'Hiragino Sans', 'Noto Sans JP', sans-serif; fill: #6b7280; }
+    .small { font: 400 11.5px 'Hiragino Sans', 'Noto Sans JP', sans-serif; fill: #6b7280; }
+    .accent-label { font: 700 14px 'Hiragino Sans', 'Noto Sans JP', sans-serif; fill: #4f9a4a; }
+    .arrow { stroke: #8b949e; stroke-width: 1.5; fill: none; marker-end: url(#head); }
+  </style>
+  <defs>
+    <marker id="head" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0L8 4L0 8z" fill="#8b949e"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="74" width="150" height="64" rx="8" class="box"/>
+  <text x="40" y="100" class="label">curl文字列</text>
+  <text x="40" y="122" class="small">貼り付け入力</text>
+
+  <rect x="240" y="74" width="150" height="64" rx="8" class="accent-box"/>
+  <text x="260" y="100" class="accent-label">parseCurl</text>
+  <text x="260" y="122" class="small">解析</text>
+
+  <rect x="240" y="-6" width="150" height="0" />
+
+  <rect x="460" y="74" width="160" height="64" rx="8" class="accent-box"/>
+  <text x="480" y="100" class="accent-label">RequestSpec</text>
+  <text x="480" y="122" class="small">UIで編集できるモデル</text>
+
+  <rect x="680" y="24" width="120" height="50" rx="8" class="box"/>
+  <text x="700" y="54" class="label">App(UI)</text>
+
+  <rect x="680" y="100" width="120" height="76" rx="8" class="box"/>
+  <text x="700" y="126" class="label">GENERATORS</text>
+  <text x="700" y="146" class="small">curl / fetch</text>
+  <text x="700" y="162" class="small">Python / Go</text>
+
+  <path class="arrow" d="M170 106 H232"/>
+  <path class="arrow" d="M390 106 H452"/>
+  <path class="arrow" d="M620 100 C650 90 655 70 678 58"/>
+  <path class="arrow" d="M620 120 C650 128 655 135 678 138"/>
+  <path class="arrow" d="M740 76 V96"/>
+</svg>
