@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { toCurl, toFetch, toGoHttp, toPythonRequests } from './generate';
+import {
+  toCurl,
+  toFetch,
+  toGoHttp,
+  toHttpie,
+  toPhpCurl,
+  toPythonRequests,
+  toRawHttp,
+  toRubyNetHttp,
+} from './generate';
 import { emptySpec, encodeFormBody, fullUrl, type RequestSpec } from './request';
 
 function spec(overrides: Partial<RequestSpec>): RequestSpec {
@@ -82,5 +91,92 @@ describe('toGoHttp', () => {
     expect(code).toContain('strings.NewReader("{\\"a\\":1}")');
     expect(code).toContain('req.Header.Set("X-Trace", "abc")');
     expect(code).toContain('http.NewRequest("POST"');
+  });
+});
+
+describe('toRubyNetHttp', () => {
+  it('メソッドをクラス名に写しボディとヘッダを設定する', () => {
+    const code = toRubyNetHttp(
+      spec({
+        method: 'POST',
+        url: 'https://x.example/items',
+        headers: [{ key: 'X-Trace', value: 'abc' }],
+        bodyKind: 'json',
+        body: '{"a":1}',
+      }),
+    );
+    expect(code).toContain("require 'net/http'");
+    expect(code).toContain('request = Net::HTTP::Post.new(uri)');
+    expect(code).toContain("request['Content-Type'] = 'application/json'");
+    expect(code).toContain("request['X-Trace'] = 'abc'");
+    expect(code).toContain('request.body = \'{"a":1}\'');
+  });
+});
+
+describe('toPhpCurl', () => {
+  it('CUSTOMREQUESTとヘッダ配列・POSTFIELDSを組む', () => {
+    const code = toPhpCurl(
+      spec({
+        method: 'PUT',
+        url: 'https://x.example/items/1',
+        bodyKind: 'json',
+        body: '{"a":1}',
+      }),
+    );
+    expect(code).toContain("curl_init('https://x.example/items/1')");
+    expect(code).toContain("curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT')");
+    expect(code).toContain("'Content-Type: application/json'");
+    expect(code).toContain('CURLOPT_POSTFIELDS');
+  });
+});
+
+describe('toHttpie', () => {
+  it('クエリは==・ヘッダは:・平坦なJSONはフィールド構文にする', () => {
+    const code = toHttpie(
+      spec({
+        method: 'POST',
+        url: 'https://x.example/users',
+        query: [{ key: 'dry', value: '1' }],
+        headers: [{ key: 'Authorization', value: 'Bearer t' }],
+        bodyKind: 'json',
+        body: '{"name":"yamada","admin":true}',
+      }),
+    );
+    expect(code).toContain('http POST https://x.example/users');
+    expect(code).toContain('dry==1');
+    expect(code).toContain('Authorization:Bearer');
+    expect(code).toContain('name=yamada');
+    expect(code).toContain('admin:=true');
+  });
+
+  it('ネストしたJSONは--rawへ退避しContent-Typeを補う', () => {
+    const code = toHttpie(
+      spec({ method: 'POST', url: 'https://x.example/', bodyKind: 'json', body: '[1,2,3]' }),
+    );
+    expect(code).toContain("--raw='[1,2,3]'");
+    expect(code).toContain('Content-Type:application/json');
+  });
+});
+
+describe('toRawHttp', () => {
+  it('リクエストライン・Host・Content-Lengthを組み立てる', () => {
+    const code = toRawHttp(
+      spec({
+        method: 'POST',
+        url: 'https://api.example.com/v1/users',
+        query: [{ key: 'dry', value: '1' }],
+        bodyKind: 'json',
+        body: '{"a":1}',
+      }),
+    );
+    expect(code).toContain('POST /v1/users?dry=1 HTTP/1.1\r\n');
+    expect(code).toContain('Host: api.example.com');
+    expect(code).toContain('Content-Type: application/json');
+    expect(code).toContain('Content-Length: 7');
+    expect(code.endsWith('\r\n\r\n{"a":1}')).toBe(true);
+  });
+
+  it('不正なURLでは案内文を返す', () => {
+    expect(toRawHttp(spec({ url: 'not a url' }))).toContain('有効なURL');
   });
 });
