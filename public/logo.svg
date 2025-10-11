@@ -1,6 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="reqbuildのロゴ">
   <title>reqbuild</title>
-  <rect x="8" y="14" width="48" height="36" rx="8" fill="none" stroke="#c9d1d9" stroke-width="4"/>
-  <path d="M18 32h18" stroke="#8fd18a" stroke-width="4" stroke-linecap="round"/>
-  <path d="M30 24l8 8-8 8" fill="none" stroke="#8fd18a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <style>
+    :root {
+      --fg: #21242c;
+      --ac: #1d7a57;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fg: #e8e9ee;
+        --ac: #6ad3a3;
+      }
+    }
+    .frame {
+      stroke: var(--fg);
+    }
+    .accent {
+      stroke: var(--ac);
+    }
+  </style>
+  <rect class="frame" x="7.5" y="14.5" width="49" height="35" rx="9" fill="none" stroke-width="3" />
+  <path class="accent" d="M17 32h17" stroke-width="3.4" stroke-linecap="round" />
+  <path class="accent" d="M29 23.5l9 8.5-9 8.5" fill="none" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
 </svg>
