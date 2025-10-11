@@ -77,7 +77,9 @@ export function toPythonRequests(spec: RequestSpec): string {
   const args: string[] = [pyString(spec.url)];
   const query = spec.query.filter((p) => p.key !== '');
   if (query.length > 0) {
-    args.push(`params={${query.map((p) => `${pyString(p.key)}: ${pyString(p.value)}`).join(', ')}}`);
+    args.push(
+      `params={${query.map((p) => `${pyString(p.key)}: ${pyString(p.value)}`).join(', ')}}`,
+    );
   }
   const headers = spec.headers.filter((h) => h.key !== '');
   const implied = impliedContentType(spec);
@@ -143,9 +145,7 @@ export function toGoHttp(spec: RequestSpec): string {
   lines.push(')', '', 'func main() {');
   if (hasBody(spec)) {
     lines.push(`\tbody := strings.NewReader(${goString(effectiveBody(spec))})`);
-    lines.push(
-      `\treq, err := http.NewRequest(${goString(spec.method)}, ${goString(url)}, body)`,
-    );
+    lines.push(`\treq, err := http.NewRequest(${goString(spec.method)}, ${goString(url)}, body)`);
   } else {
     lines.push(`\treq, err := http.NewRequest(${goString(spec.method)}, ${goString(url)}, nil)`);
   }
@@ -171,11 +171,149 @@ export function toGoHttp(spec: RequestSpec): string {
   return lines.join('\n');
 }
 
+function rubyString(text: string): string {
+  return `'${text.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+export function toRubyNetHttp(spec: RequestSpec): string {
+  const url = fullUrl(spec);
+  // POST -> Post のように先頭だけ大文字へ。Net::HTTP::Post 等のクラス名に対応する
+  const klass = spec.method.charAt(0) + spec.method.slice(1).toLowerCase();
+  const headers = spec.headers.filter((h) => h.key !== '');
+  const implied = impliedContentType(spec);
+  const lines = ["require 'net/http'", "require 'uri'", ''];
+  lines.push(`uri = URI(${rubyString(url)})`);
+  lines.push('http = Net::HTTP.new(uri.host, uri.port)');
+  lines.push("http.use_ssl = uri.scheme == 'https'");
+  lines.push('');
+  lines.push(`request = Net::HTTP::${klass}.new(uri)`);
+  if (implied && hasBody(spec)) {
+    lines.push(`request['Content-Type'] = ${rubyString(implied)}`);
+  }
+  for (const h of headers) lines.push(`request[${rubyString(h.key)}] = ${rubyString(h.value)}`);
+  if (hasBody(spec)) lines.push(`request.body = ${rubyString(effectiveBody(spec))}`);
+  lines.push('', 'response = http.request(request)', 'puts response.body');
+  return lines.join('\n');
+}
+
+function phpString(text: string): string {
+  return `'${text.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+export function toPhpCurl(spec: RequestSpec): string {
+  const url = fullUrl(spec);
+  const headers = spec.headers.filter((h) => h.key !== '');
+  const implied = impliedContentType(spec);
+  const lines = [
+    '<?php',
+    '',
+    `$ch = curl_init(${phpString(url)});`,
+    'curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);',
+  ];
+  if (spec.method !== 'GET') {
+    lines.push(`curl_setopt($ch, CURLOPT_CUSTOMREQUEST, ${phpString(spec.method)});`);
+  }
+  const headerItems = [
+    ...(implied && hasBody(spec) ? [`Content-Type: ${implied}`] : []),
+    ...headers.map((h) => `${h.key}: ${h.value}`),
+  ];
+  if (headerItems.length > 0) {
+    lines.push('curl_setopt($ch, CURLOPT_HTTPHEADER, [');
+    for (const item of headerItems) lines.push(`    ${phpString(item)},`);
+    lines.push(']);');
+  }
+  if (hasBody(spec)) {
+    lines.push(`curl_setopt($ch, CURLOPT_POSTFIELDS, ${phpString(effectiveBody(spec))});`);
+  }
+  lines.push('', '$response = curl_exec($ch);', 'curl_close($ch);', 'echo $response;');
+  return lines.join('\n');
+}
+
+// JSONが平坦なオブジェクトならHTTPieのフィールド構文へ。配列やネストはnullで生ボディへ回す
+function flatJsonFields(jsonText: string): string[] | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return Object.entries(value).map(([k, v]) =>
+    typeof v === 'string' ? `${k}=${v}` : `${k}:=${JSON.stringify(v)}`,
+  );
+}
+
+export function toHttpie(spec: RequestSpec): string {
+  const headers = spec.headers.filter((h) => h.key !== '');
+  const query = spec.query.filter((p) => p.key !== '');
+  const flags: string[] = [];
+  const fields: string[] = [];
+  let rawBody: string | null = null;
+
+  if (hasBody(spec)) {
+    if (spec.bodyKind === 'form') {
+      flags.push('--form');
+      for (const line of spec.body.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed === '') continue;
+        const eq = trimmed.indexOf('=');
+        fields.push(eq === -1 ? `${trimmed}=` : `${trimmed.slice(0, eq)}=${trimmed.slice(eq + 1)}`);
+      }
+    } else if (spec.bodyKind === 'json') {
+      const flat = flatJsonFields(spec.body);
+      if (flat) fields.push(...flat);
+      else rawBody = spec.body.trim();
+    } else {
+      rawBody = spec.body;
+    }
+  }
+  if (rawBody !== null) flags.push(`--raw=${shellQuote(rawBody)}`);
+
+  const parts = ['http', ...flags];
+  if (spec.method !== 'GET') parts.push(spec.method);
+  parts.push(shellQuote(spec.url));
+  for (const p of query) parts.push(shellQuote(`${p.key}==${p.value}`));
+  for (const h of headers) parts.push(shellQuote(`${h.key}:${h.value}`));
+  // 生ボディのJSONはfield構文と違い自動でContent-Typeが付かないため補う
+  if (
+    rawBody !== null &&
+    spec.bodyKind === 'json' &&
+    !headers.some((h) => h.key.toLowerCase() === 'content-type')
+  ) {
+    parts.push('Content-Type:application/json');
+  }
+  parts.push(...fields.map(shellQuote));
+  return parts.join(' ');
+}
+
+export function toRawHttp(spec: RequestSpec): string {
+  const full = fullUrl(spec);
+  let parsed: URL;
+  try {
+    parsed = new URL(full);
+  } catch {
+    return '# 有効なURLを入力すると生のHTTPリクエストを表示します';
+  }
+  const target = `${parsed.pathname}${parsed.search}` || '/';
+  const lines = [`${spec.method} ${target} HTTP/1.1`, `Host: ${parsed.host}`];
+  const implied = impliedContentType(spec);
+  if (implied && hasBody(spec)) lines.push(`Content-Type: ${implied}`);
+  for (const h of spec.headers.filter((h) => h.key !== '')) lines.push(`${h.key}: ${h.value}`);
+  const body = hasBody(spec) ? effectiveBody(spec) : '';
+  if (body !== '') lines.push(`Content-Length: ${new TextEncoder().encode(body).length}`);
+  const head = lines.join('\r\n');
+  return body === '' ? `${head}\r\n\r\n` : `${head}\r\n\r\n${body}`;
+}
+
 export { encodeFormBody };
 
 export const GENERATORS = [
   { id: 'curl', name: 'curl', generate: toCurl },
-  { id: 'fetch', name: 'fetch(JS)', generate: toFetch },
-  { id: 'python', name: 'Python requests', generate: toPythonRequests },
-  { id: 'go', name: 'Go net/http', generate: toGoHttp },
+  { id: 'fetch', name: 'fetch', generate: toFetch },
+  { id: 'python', name: 'Python', generate: toPythonRequests },
+  { id: 'go', name: 'Go', generate: toGoHttp },
+  { id: 'ruby', name: 'Ruby', generate: toRubyNetHttp },
+  { id: 'php', name: 'PHP', generate: toPhpCurl },
+  { id: 'httpie', name: 'HTTPie', generate: toHttpie },
+  { id: 'http', name: 'HTTP', generate: toRawHttp },
 ] as const;
