@@ -5,47 +5,66 @@
 [![Test](https://img.shields.io/badge/Test-Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**HTTPリクエストを組み立て、curl・fetch・各言語のクライアントコードを相互に生成するブラウザツールです。**
+**HTTPリクエストを組み立て、curl・各言語のクライアントコード・生のHTTPへ相互に書き換えるブラウザツールです。**
 
 ## 概要
 
-メソッド・URL・クエリ・ヘッダー・ボディを画面で編集すると、その内容を curl、JavaScript の fetch、Python の requests、Go の net/http のコードとして即座に出力します。逆に、既存の curl コマンドを貼り付けると解析してフォームに展開できるため、手元のコマンドを他言語へ移し替える用途にも使えます。変換はすべてブラウザ内で完結し、入力したURLや認証情報を外部に送りません。
+メソッド・URL・クエリ・ヘッダー・ボディを画面で編集すると、その内容を curl・JavaScript の fetch・Python の requests・Go の net/http・Ruby の Net::HTTP・PHP の cURL・HTTPie・HTTP/1.1 の生リクエストとして即座に出力します。逆に、既存の curl コマンドを貼り付けると解析してフォームに展開できるため、手元のコマンドを他言語へ移し替える用途にも使えます。変換はすべてブラウザ内で完結し、入力したURLや認証情報を外部に送りません。
+
+組み立てたリクエストは共有リンクとしてURLへ畳めるほか、編集中の内容はブラウザに保存され、開き直しても続きから扱えます。
 
 遊ぶ: https://miruky.github.io/reqbuild/
 
 ### なぜ作ったのか
 
-APIを試すときは curl で叩き、実装するときは各言語のクライアントに書き直す、という往復が頻繁に起きます。そのたびにヘッダーやボディのエスケープを手で移すのは間違いのもとです。1つのリクエスト定義から各表現を機械的に生成できれば、その手間と取り違えがなくなります。curlとの双方向変換にしたのは、既存の手元コマンドを起点にできるようにするためです。
-
-## 使い方
-
-- メソッド・URL・クエリパラメータ・ヘッダー・ボディ(なし / JSON / フォーム)を編集します
-- 出力タブで curl / fetch / Python / Go を切り替え、生成結果をコピーします
-- 既存の curl コマンドを貼り付けると、解析してフォームへ反映します
+APIを試すときは curl で叩き、実装するときは各言語のクライアントに書き直す、という往復が頻繁に起きます。そのたびにヘッダーやボディのエスケープを手で移すのは間違いのもとです。1つのリクエスト定義から各表現を機械的に生成できれば、その手間と取り違えがなくなります。curlとの双方向変換にしたのは、既存の手元コマンドを起点にできるようにするためです。出力に生のHTTPを加えたのは、ライブラリを通さず実際にワイヤへ流れるバイト列を確認したい場面があるからです。
 
 ## アーキテクチャ
 
 ![reqbuildのアーキテクチャ](docs/architecture.svg)
 
-中心にあるのは編集可能な `RequestSpec` です。curl文字列は `parseCurl` でこのモデルに落とし、各ジェネレータ(`GENERATORS`)はこのモデルから各言語の表現を組み立てます。解析・生成のロジックはDOM非依存の純粋関数で、UIはモデルを編集して結果を描くだけです。
+中心にあるのは編集可能な `RequestSpec` です。curl文字列は `parseCurl` でこのモデルに落とし、各ジェネレータ(`GENERATORS`)はこのモデルから各言語の表現を組み立てます。解析・生成のロジックはDOM非依存の純粋関数で、UIはモデルを編集して結果を描くだけです。共有リンクの符号化・テーマの解決・JSON整形も同様に純粋関数として切り出し、テストで担保しています。
 
 ## 技術スタック
 
-| カテゴリ | 技術 |
-|:--|:--|
-| 言語 | TypeScript 5(strict) |
-| ビルド | Vite |
-| テスト | Vitest(17テスト) |
-| リンタ | ESLint + Prettier |
-| CI / CD | GitHub Actions |
-| 配信 | GitHub Pages |
-| 実行時依存 | なし |
+| カテゴリ   | 技術                                            |
+| :--------- | :---------------------------------------------- |
+| 言語       | TypeScript 5(strict / noUncheckedIndexedAccess) |
+| ビルド     | Vite 8                                          |
+| テスト     | Vitest 4(35テスト)                              |
+| リンタ     | ESLint + Prettier                               |
+| CI / CD    | GitHub Actions                                  |
+| 配信       | GitHub Pages                                    |
+| 実行時依存 | なし                                            |
+
+## 使い方
+
+- メソッド・URL・クエリパラメータ・ヘッダー・ボディ(なし / JSON / フォーム / 生テキスト)を編集します
+- 出力タブで curl / fetch / Python / Go / Ruby / PHP / HTTPie / HTTP を切り替え、生成結果をコピーします
+- 既存の curl コマンドを貼り付けると、解析してフォームへ反映します
+- JSONボディは「整形」「最小化」で読みやすさと送信形を切り替えられます
+- 「共有リンク」でいまのリクエストをURLに畳み、そのまま他者へ渡せます
+
+### キーボード操作
+
+| 操作                          | 効果                       |
+| :---------------------------- | :------------------------- |
+| `Ctrl` / `⌘` + `Enter`        | 生成コードをコピー         |
+| `Ctrl` / `⌘` + `S`            | 共有リンクを作成してコピー |
+| `←` / `→`(タブにフォーカス時) | 出力先の切り替え           |
+
+### 取り込めるcurlのフラグ
+
+`-X/--request`、`-H/--header`、`-d/--data/--data-raw`、`--data-urlencode`、`--json`、`-u/--user`、`--url`、`-G/--get` を解釈します。`-s` や `-L` のような挙動オプションは読み飛ばし、未対応のフラグはエラーとして知らせます。
 
 ## プロジェクト構成
 
 - `src/lib/request.ts` — リクエスト定義(RequestSpec)の型と操作
-- `src/lib/curl.ts` — curlコマンドの解析
-- `src/lib/generate.ts` — curl / fetch / Python / Go のコード生成
+- `src/lib/curl.ts` — curlコマンドの字句解析
+- `src/lib/generate.ts` — 各言語コードと生HTTPの生成
+- `src/lib/share.ts` — リクエストとURLフラグメントの相互変換
+- `src/lib/format.ts` — JSONボディの整形・最小化
+- `src/lib/theme.ts` — ライト/ダーク/システムの解決
 - `src/app.ts` — 編集フォームと出力のUI
 - `src/main.ts` — マウント
 - `docs/architecture.svg` — アーキテクチャ図
@@ -79,18 +98,19 @@ npm run lint
 
 ### デプロイ
 
-`main` ブランチへのプッシュで GitHub Actions がビルドし、GitHub Pages へ配信します。
+`main` ブランチへのプッシュで GitHub Actions がビルドし、GitHub Pages へ配信します。Pages配信時は `REQBUILD_BASE` 環境変数で Vite の `base` をリポジトリ名のサブパスへ差し替えます。
 
 ## 設計方針
 
 - **1つの定義から多表現** — RequestSpecを単一の真実とし、各言語コードはそこから生成する
 - **curlとの双方向** — 既存のcurlを解析して起点にできるようにする
-- **ロジックの分離** — 解析・生成をDOM非依存にし、テストで担保する
-- **データを外に出さない** — 変換はすべてブラウザ内で完結する
+- **ロジックの分離** — 解析・生成・共有・整形をDOM非依存にし、テストで担保する
+- **データを外に出さない** — 変換も保存もすべてブラウザ内で完結する
+- **配色の追従** — ライト/ダークはOS設定に従い、明示切替も記憶する。図とロゴは `currentColor` とCSSカスタムプロパティで地色になじむ
 
 ## 制約
 
-生成対象は curl・fetch・Python requests・Go net/http です。multipart のファイル送信や認証フローの自動化は扱わず、素朴なリクエストの表現変換に用途を絞っています。
+生成対象は curl・fetch・Python requests・Go net/http・Ruby Net::HTTP・PHP cURL・HTTPie・HTTP/1.1 の生リクエストです。multipart のファイル送信や認証フローの自動化は扱わず、素朴なリクエストの表現変換に用途を絞っています。HTTPieのボディは、平坦なオブジェクトはフィールド構文に、入れ子や配列は `--raw` に振り分けます。
 
 ## ライセンス
 
